@@ -1,0 +1,327 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Guest Count Heatmap</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Public+Sans:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: one narrow working column — settings, day picker, day heatmap, week overview, entry form. */
+:root{
+  --bg:#f7f8fa;--panel:#ffffff;--fg:#14202e;--muted:#5d6b7b;--line:#dde3ea;--accent:#185fa5;--accent-ink:#ffffff;
+  --h0:#e6f1fb;--h0t:#0c447c;--h1:#b5d4f4;--h1t:#0c447c;--h2:#85b7eb;--h2t:#042c53;--h3:#378add;--h3t:#042c53;--h4:#185fa5;--h4t:#e6f1fb;--h5:#0c447c;--h5t:#e6f1fb;
+  --wait:#fcebeb;--wait-ink:#791f1f;--bad:#a32d2d;--ok:#3b6d11;
+  --sans:"Public Sans",system-ui,-apple-system,"Segoe UI",sans-serif;--mono:"JetBrains Mono",ui-monospace,Menlo,monospace;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#10161d;--panel:#18212b;--fg:#e8edf2;--muted:#9aa8b6;--line:#2a3542;--accent:#5a9fe0;--accent-ink:#0b1622;--wait:#4a1b1b;--wait-ink:#f7c1c1;--bad:#f09595;--ok:#97c459;color-scheme:dark}}
+:root[data-theme="dark"]{--bg:#10161d;--panel:#18212b;--fg:#e8edf2;--muted:#9aa8b6;--line:#2a3542;--accent:#5a9fe0;--accent-ink:#0b1622;--wait:#4a1b1b;--wait-ink:#f7c1c1;--bad:#f09595;--ok:#97c459;color-scheme:dark}
+body{background:var(--bg);color:var(--fg);font-family:var(--sans);font-size:15px;line-height:1.5;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:20px 40px}
+.wrap{max-width:760px;margin:0 auto;display:flex;flex-direction:column;gap:18px}
+h1{font-size:22px;font-weight:600;margin:0;text-wrap:balance;letter-spacing:-.01em}
+h2{font-size:15px;font-weight:600;margin:0}
+.sub{color:var(--muted);font-size:13px;margin:2px 0 0}
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:14px;display:flex;flex-direction:column;gap:12px;min-width:0}
+.row{display:flex;flex-wrap:wrap;gap:10px;align-items:end}
+label{display:flex;flex-direction:column;gap:4px;font-size:12px;color:var(--muted)}
+input,select{font:inherit;font-size:15px;color:var(--fg);background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:8px 10px;min-width:0}
+input:focus-visible,select:focus-visible,button:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+input[type=number]{font-family:var(--mono);font-variant-numeric:tabular-nums}
+.small{width:84px}
+.days{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:4px}
+.days button{font:inherit;font-size:13px;font-weight:500;padding:8px 0;border:1px solid var(--line);background:var(--panel);color:var(--fg);border-radius:8px;cursor:pointer;display:flex;flex-direction:column;align-items:center;line-height:1.2}
+.days button small{font-size:11px;color:var(--muted);font-weight:400}
+.days button[aria-pressed="true"]{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
+.days button[aria-pressed="true"] small{color:var(--accent-ink)}
+.scroll{overflow-x:auto;margin:0 -2px}
+table{border-collapse:separate;border-spacing:3px;font-size:13px;font-variant-numeric:tabular-nums}
+th{font-weight:500;font-size:11px;color:var(--muted);padding:4px 2px;text-align:center;line-height:1.2;white-space:nowrap}
+th.h,td.h{text-align:left;white-space:nowrap;font-size:12px;color:var(--muted);padding-right:6px}
+td.c{text-align:center;padding:8px 4px;min-width:40px;border-radius:5px;font-family:var(--mono);font-weight:500}
+td.tot{text-align:center;font-family:var(--mono);font-weight:500;padding:6px 4px}
+th button.date{font:inherit;font-size:11px;color:var(--accent);background:none;border:0;cursor:pointer;text-decoration:underline;padding:2px}
+.legend{display:flex;flex-wrap:wrap;gap:8px 16px;font-size:12px;color:var(--muted);align-items:center}
+.ramp{display:inline-flex;height:10px;width:96px;border-radius:3px;overflow:hidden;vertical-align:middle;margin:0 6px}
+.ramp i{flex:1}
+.sw{display:inline-block;width:10px;height:10px;border-radius:2px;background:var(--wait);border:1px solid var(--wait-ink);vertical-align:middle;margin-right:5px}
+.hours{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+.hours label{flex-direction:row;align-items:center;justify-content:space-between;gap:8px;font-size:13px;color:var(--fg)}
+.hours input{width:76px;text-align:right}
+.btns{display:flex;flex-wrap:wrap;gap:8px}
+button.pri,button.sec,button.dan{font:inherit;font-size:14px;font-weight:500;border-radius:8px;padding:9px 14px;cursor:pointer;border:1px solid var(--accent)}
+button.pri{background:var(--accent);color:var(--accent-ink)}
+button.sec{background:transparent;color:var(--accent)}
+button.dan{background:transparent;color:var(--bad);border-color:var(--bad)}
+.msg{font-size:13px;min-height:1em}
+.msg.err{color:var(--bad)}.msg.ok{color:var(--ok)}
+.notes{font-size:12px;color:var(--muted);margin:0;padding-left:18px}
+.kpis{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+.kpi{background:var(--bg);border-radius:8px;padding:10px}
+.kpi b{display:block;font-family:var(--mono);font-size:20px;font-weight:500}
+.kpi span{font-size:12px;color:var(--muted)}
+.kpi.red b{color:var(--bad)}
+.empty{color:var(--muted);font-size:14px;padding:6px 0}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+</head>
+<body>
+
+
+<div class="wrap">
+  <header>
+    <h1>Guest Count Heatmap</h1>
+    <p class="sub">Hourly guest counts (GC) by day, expected GC, waiting list and servers needed. Tap a date to edit it. Changes save in your own browser only.</p>
+  </header>
+
+  <section class="panel" aria-label="Settings">
+    <div class="row">
+      <label for="std">Guests per server<input id="std" class="small" type="number" min="1" step="1" value="15"></label>
+      <label for="dine">Dine time (hrs)<input id="dine" class="small" type="number" min="0.25" step="0.25" value="1"></label>
+      <span class="msg" id="setmsg"></span>
+    </div>
+  </section>
+
+  <nav class="days" id="days" aria-label="Day of week"></nav>
+
+  <section class="panel" aria-labelledby="dayttl">
+    <h2 id="dayttl">Saturday</h2>
+    <div class="kpis" id="kpis"></div>
+    <div class="scroll"><table id="daytbl"></table></div>
+    <ul class="notes" id="notes"></ul>
+    <div class="legend">
+      <span>Fewer<span class="ramp"><i style="background:var(--h0)"></i><i style="background:var(--h1)"></i><i style="background:var(--h2)"></i><i style="background:var(--h3)"></i><i style="background:var(--h4)"></i><i style="background:var(--h5)"></i></span>More guests</span>
+      <span><span class="sw"></span>Waited · left</span>
+    </div>
+    <p class="sub">Expected GC = average of the logged dates + guests who walked out at that hour, averaged. Servers = expected GC × dine time ÷ guests per server, rounded up.</p>
+  </section>
+
+  <section class="panel" aria-labelledby="weekttl">
+    <h2 id="weekttl">Whole week — expected GC</h2>
+    <div class="scroll"><table id="weektbl"></table></div>
+    <p class="sub">Tap a day to open it. Blank days have no data yet.</p>
+  </section>
+
+  <section class="panel" aria-labelledby="monttl">
+    <h2 id="monttl">Monthly averages by day</h2>
+    <div class="row">
+      <label for="msel">Month<select id="msel"></select></label>
+      <label for="mcmp">Compare with<select id="mcmp"></select></label>
+    </div>
+    <div class="scroll"><table id="montbl"></table></div>
+    <p class="sub" id="monnote">Avg check = average sales ÷ average guests. Change vs the compared month in small text.</p>
+    <details>
+      <summary style="cursor:pointer;color:var(--accent);font-size:14px;font-weight:500">Edit monthly figures</summary>
+      <form id="mf" novalidate style="display:flex;flex-direction:column;gap:10px;margin-top:10px">
+        <label for="mmonth">Month<input id="mmonth" type="month" required></label>
+        <div class="scroll"><table id="mform"></table></div>
+        <p class="sub">Sales in pesos (₱). Sales contri = the two % parts from your log (e.g. 24 and 76).</p>
+        <div class="btns"><button class="pri" type="submit" id="msave">Save month</button></div>
+        <p class="msg" id="mmsg" role="status"></p>
+      </form>
+    </details>
+  </section>
+
+  <section class="panel" aria-labelledby="formttl">
+    <h2 id="formttl">Add a day</h2>
+    <form id="f" novalidate>
+      <div style="display:flex;flex-direction:column;gap:12px">
+        <div class="row">
+          <label for="fdate">Date<input id="fdate" type="date" required></label>
+          <span class="msg" id="fday"></span>
+        </div>
+        <div class="hours" id="fhours"></div>
+        <h2 style="font-size:14px">Waiting list (leave blank if none)</h2>
+        <div class="row">
+          <label for="wh">Hour wait started<select id="wh"></select></label>
+          <label for="wp">Parties waited<input id="wp" class="small" type="number" min="0" step="1"></label>
+          <label for="wg">Guests waited<input id="wg" class="small" type="number" min="0" step="1"></label>
+          <label for="ws">Parties seated<input id="ws" class="small" type="number" min="0" step="1"></label>
+        </div>
+        <label for="fnote">Note<input id="fnote" type="text" maxlength="160" placeholder="e.g. mass ended 7pm, 2 trainees on floor"></label>
+        <div class="btns">
+          <button class="pri" type="submit" id="save">Save day</button>
+          <button class="sec" type="button" id="clear">Clear form</button>
+          <button class="dan" type="button" id="del" hidden>Delete this date</button>
+          <button class="dan" type="button" id="delyes" hidden>Yes, delete</button>
+        </div>
+        <p class="msg" id="fmsg" role="status"></p>
+      </div>
+    </form>
+  </section>
+</div>
+
+<script>
+const HOURS=["10-11 AM","11-12 NN","12-1 PM","1-2 PM","2-3 PM","3-4 PM","4-5 PM","5-6 PM","6-7 PM","7-8 PM","8-9 PM","9-10 PM"];
+const DAYS=["Monday","Tuesday","Wednesday","Thursday","Friday","Saturday","Sunday"];
+const $=id=>document.getElementById(id);
+let entries={}, settings={std:15,dine:1}, day="Saturday", db=null, editing=null, saved=true;
+
+function dayOf(iso){const d=new Date(iso+"T00:00:00");if(isNaN(d))return null;return DAYS[(d.getDay()+6)%7];}
+function fmtDate(iso){const d=new Date(iso+"T00:00:00");return d.toLocaleDateString("en-US",{month:"short",day:"numeric"});}
+function num(v){return typeof v==="number"&&isFinite(v)?v:null;}
+function lost(e){const p=num(e.wParties),s=num(e.wSeated),g=num(e.wGuests);if(p==null||s==null||g==null||p<=0)return 0;return Math.max(0,p-s)*(g/p);}
+function shade(v,max){if(v==null)return null;const r=max>0?v/max:0;const i=r<.15?0:r<.35?1:r<.55?2:r<.75?3:r<.9?4:5;return [`var(--h${i})`,`var(--h${i}t)`];}
+
+function stats(d){
+  const list=Object.values(entries).filter(e=>dayOf(e.date)===d).sort((a,b)=>a.date.localeCompare(b.date));
+  const n=list.length;
+  const exp=HOURS.map((_,i)=>{const vals=list.map(e=>num(e.gc?.[i])).filter(v=>v!=null);if(!vals.length)return null;
+    const avg=vals.reduce((s,v)=>s+v,0)/vals.length;const l=list.reduce((s,e)=>s+(e.wHour===i?lost(e):0),0)/n;return Math.round(avg+l);});
+  const waited=HOURS.map((_,i)=>list.reduce((s,e)=>s+(e.wHour===i?(num(e.wGuests)||0):0),0));
+  const left=HOURS.map((_,i)=>Math.round(list.reduce((s,e)=>s+(e.wHour===i?lost(e):0),0)));
+  return {list,exp,waited,left};
+}
+function servers(v){if(v==null)return "";return Math.ceil(v*(settings.dine||1)/(settings.std||15));}
+
+function td(v,max){const c=shade(v,max);if(!c)return '<td class="c" style="color:var(--muted)">–</td>';return `<td class="c" style="background:${c[0]};color:${c[1]}">${v}</td>`;}
+
+function renderDays(){
+  $("days").innerHTML="";
+  DAYS.forEach(d=>{const b=document.createElement("button");b.type="button";const n=Object.values(entries).filter(e=>dayOf(e.date)===d).length;
+    b.setAttribute("aria-pressed",d===day);b.innerHTML=`${d.slice(0,3)}<small>${n?n+" day"+(n>1?"s":""):"–"}</small>`;b.onclick=()=>{day=d;render();};$("days").appendChild(b);});
+}
+
+function renderDay(){
+  $("dayttl").textContent=day;
+  const {list,exp,waited,left}=stats(day);
+  const tbl=$("daytbl");
+  if(!list.length){tbl.innerHTML="";$("kpis").innerHTML="";$("notes").innerHTML=`<li class="empty" style="list-style:none;margin-left:-18px">No ${day} data yet. Add one with the form below.</li>`;return;}
+  const max=Math.max(1,...list.flatMap(e=>(e.gc||[]).map(num).filter(v=>v!=null)),...exp.filter(v=>v!=null));
+  let h='<thead><tr><th class="h">Hour</th>';
+  list.forEach(e=>{h+=`<th><button class="date" type="button" data-date="${e.date}" aria-label="Edit ${fmtDate(e.date)}">${fmtDate(e.date)}</button></th>`;});
+  h+='<th>Expected<br>GC</th><th>Waiting<br>list</th><th>Servers</th></tr></thead><tbody>';
+  HOURS.forEach((hr,i)=>{h+=`<tr><td class="h">${hr}</td>`;list.forEach(e=>{h+=td(num(e.gc?.[i]),max);});h+=td(exp[i],max);
+    h+=waited[i]?`<td class="c" style="background:var(--wait);color:var(--wait-ink);line-height:1.15">${waited[i]}<br><span style="font-size:10px;font-weight:400">${left[i]} left</span></td>`:'<td class="c" style="color:var(--muted)">–</td>';
+    h+=`<td class="tot">${servers(exp[i])}</td></tr>`;});
+  h+='<tr><td class="h" style="color:var(--fg);font-weight:500">Total</td>';
+  list.forEach(e=>{const t=(e.gc||[]).map(num).filter(v=>v!=null).reduce((s,v)=>s+v,0);h+=`<td class="tot">${t}</td>`;});
+  const et=exp.filter(v=>v!=null).reduce((s,v)=>s+v,0);const wt=waited.reduce((s,v)=>s+v,0);
+  h+=`<td class="tot">${et}</td><td class="tot" style="color:var(--bad)">${wt||""}</td><td></td></tr></tbody>`;
+  tbl.innerHTML=h;
+  tbl.querySelectorAll("button.date").forEach(b=>b.onclick=()=>loadForm(b.dataset.date));
+  const pk=exp.reduce((bi,v,i)=>v!=null&&(bi<0||v>exp[bi])?i:bi,-1);
+  const lt=left.reduce((s,v)=>s+v,0);
+  $("kpis").innerHTML=`<div class="kpi"><b>${pk>=0?HOURS[pk]:"–"}</b><span>Peak hour (${pk>=0?exp[pk]:0} expected GC)</span></div><div class="kpi"><b>${pk>=0?servers(exp[pk]):"–"}</b><span>Servers needed at peak</span></div><div class="kpi"><b>${wt}</b><span>Guests who waited (all dates)</span></div><div class="kpi red"><b>${lt}</b><span>Guests who walked out</span></div>`;
+  const ns=list.filter(e=>e.note).map(e=>`<li>${fmtDate(e.date)}: <span></span></li>`);
+  $("notes").innerHTML=ns.join("");
+  const spans=$("notes").querySelectorAll("li span");let k=0;list.filter(e=>e.note).forEach(e=>{spans[k++].textContent=e.note;});
+}
+
+function renderWeek(){
+  const all=DAYS.map(d=>stats(d).exp);
+  const max=Math.max(1,...all.flat().filter(v=>v!=null));
+  let h='<thead><tr><th class="h">Hour</th>'+DAYS.map(d=>`<th><button class="date" type="button" data-day="${d}">${d.slice(0,3)}</button></th>`).join("")+'</tr></thead><tbody>';
+  HOURS.forEach((hr,i)=>{h+=`<tr><td class="h">${hr}</td>`+all.map(col=>td(col[i],max)).join("")+'</tr>';});
+  h+='<tr><td class="h" style="color:var(--fg);font-weight:500">Total</td>'+all.map(col=>{const v=col.filter(x=>x!=null);return `<td class="tot">${v.length?v.reduce((s,x)=>s+x,0):""}</td>`;}).join("")+'</tr></tbody>';
+  $("weektbl").innerHTML=h;
+  $("weektbl").querySelectorAll("button.date").forEach(b=>b.onclick=()=>{day=b.dataset.day;render();$("dayttl").scrollIntoView({behavior:"smooth",block:"start"});});
+}
+let months={};
+const peso=v=>v==null?"–":"₱"+Math.round(v).toLocaleString("en-US");
+function mLabel(k){const [y,m]=k.split("-");return new Date(+y,+m-1,1).toLocaleDateString("en-US",{month:"long",year:"numeric"});}
+function chg(a,b){if(a==null||b==null||!b)return "";const p=Math.round((a-b)/b*100);return `<br><span style="font-size:10px;font-weight:400;color:${p<0?"var(--bad)":"var(--ok)"}">${p>0?"+":""}${p}%</span>`;}
+function renderMonths(){
+  const keys=Object.keys(months).sort().reverse();
+  const ms=$("msel"),mc=$("mcmp");const cur=ms.value,cc=mc.value;
+  ms.innerHTML=keys.map(k=>`<option value="${k}">${mLabel(k)}</option>`).join("")||'<option value="">No months yet</option>';
+  mc.innerHTML='<option value="">None</option>'+keys.map(k=>`<option value="${k}">${mLabel(k)}</option>`).join("");
+  if(keys.includes(cur))ms.value=cur;
+  if(cc!==""&&keys.includes(cc))mc.value=cc;else if(cc===""&&mc.dataset.touched)mc.value="";else mc.value=keys.find(k=>k<ms.value)||"";
+  const m=months[ms.value],c=months[mc.value];const tbl=$("montbl");
+  if(!m){tbl.innerHTML='<tbody><tr><td class="empty">No monthly figures yet. Open "Edit monthly figures" to add them.</td></tr></tbody>';return;}
+  const g=d=>m.days?.[d]||{},gc=d=>(c&&c.days?.[d])||{};
+  const maxS=Math.max(1,...DAYS.map(d=>num(g(d).sales)||0)),maxG=Math.max(1,...DAYS.map(d=>num(g(d).gc)||0));
+  const chk=o=>num(o.sales)!=null&&num(o.gc)?o.sales/o.gc:null;
+  const maxC=Math.max(1,...DAYS.map(d=>chk(g(d))||0));
+  let h='<thead><tr><th class="h">Day</th><th>Avg sales</th><th>Avg GC</th><th>Avg check</th><th>Sales<br>contri %</th></tr></thead><tbody>';
+  let ts=0,tg=0;
+  DAYS.forEach(d=>{const o=g(d),p=gc(d);const s=num(o.sales),n=num(o.gc),k=chk(o);if(s)ts+=s;if(n)tg+=n;
+    const cs=shade(s,maxS),cg=shade(n,maxG),ck=k!=null?shade(k,maxC):null;
+    const cell=(v,col,txt)=>col?`<td class="c" style="background:${col[0]};color:${col[1]};line-height:1.15">${txt}</td>`:'<td class="c" style="color:var(--muted)">–</td>';
+    h+=`<tr><td class="h">${d.slice(0,3)}</td>${cell(s,cs,(s>=1000?"₱"+Math.round(s/1000)+"k":peso(s))+chg(s,num(p.sales)))}${cell(n,cg,n+chg(n,num(p.gc)))}${cell(k,ck,peso(k)+chg(k,chk(p)))}<td class="tot">${num(o.c1)!=null?o.c1+" / "+(o.c2??""):"–"}</td></tr>`;});
+  h+=`<tr><td class="h" style="color:var(--fg);font-weight:500">Week</td><td class="tot">${ts?"₱"+Math.round(ts/1000)+"k":"–"}</td><td class="tot">${tg||"–"}</td><td class="tot">${ts&&tg?peso(ts/tg):"–"}</td><td></td></tr></tbody>`;
+  tbl.innerHTML=h;
+  $("monnote").textContent="Avg check = average sales ÷ average guests."+(c?" Small % = change vs "+mLabel(mc.value)+".":"")+(m.note?" Note: "+m.note:"");
+}
+function buildMonthForm(){
+  $("mform").innerHTML='<thead><tr><th class="h">Day</th><th>Avg sales ₱</th><th>Avg GC</th><th>Contri 1</th><th>Contri 2</th></tr></thead><tbody>'+
+    DAYS.map((d,i)=>`<tr><td class="h">${d.slice(0,3)}</td><td><input id="ms${i}" type="number" min="0" step="1" style="width:100px" aria-label="${d} average sales"></td><td><input id="mg${i}" type="number" min="0" step="1" style="width:70px" aria-label="${d} average guests"></td><td><input id="m1${i}" type="number" min="0" max="100" step="1" style="width:56px" aria-label="${d} sales contri part 1"></td><td><input id="m2${i}" type="number" min="0" max="100" step="1" style="width:56px" aria-label="${d} sales contri part 2"></td></tr>`).join("")+'</tbody>';
+}
+function loadMonth(k){const m=months[k];DAYS.forEach((d,i)=>{const o=m?.days?.[d]||{};$("ms"+i).value=o.sales??"";$("mg"+i).value=o.gc??"";$("m1"+i).value=o.c1??"";$("m2"+i).value=o.c2??"";});}
+$("msel").addEventListener("change",renderMonths);
+$("mcmp").addEventListener("change",()=>{$("mcmp").dataset.touched="1";renderMonths();});
+$("mmonth").addEventListener("input",()=>{if(/^\d{4}-\d{2}$/.test($("mmonth").value))loadMonth($("mmonth").value);});
+$("mf").addEventListener("submit",async ev=>{ev.preventDefault();const msg=$("mmsg");msg.className="msg err";
+  const k=$("mmonth").value;if(!/^\d{4}-\d{2}$/.test(k)){msg.textContent="Pick a month first.";return;}
+  const days={};let bad=false;
+  DAYS.forEach((d,i)=>{const o={sales:readNum("ms"+i),gc:readNum("mg"+i),c1:readNum("m1"+i),c2:readNum("m2"+i)};if(Object.values(o).some(v=>Number.isNaN(v)))bad=true;days[d]=o;});
+  if(bad){msg.textContent="Use whole numbers, 0 or more.";return;}
+  const body={month:k,days,note:months[k]?.note||""};
+  $("msave").disabled=true;
+  try{if(db)await db.collection("months").doc(k).set(body);months[k]=body;$("msel").innerHTML=`<option value="${k}">${mLabel(k)}</option>`;$("msel").value=k;renderMonths();msg.className="msg ok";msg.textContent=db?"Saved "+mLabel(k)+".":"Added for this visit only.";}
+  catch(e){msg.textContent="Couldn't save. Check your connection and try again.";}
+  finally{$("msave").disabled=false;}});
+function render(){renderDays();renderDay();renderWeek();renderMonths();}
+
+function buildForm(){
+  $("fhours").innerHTML=HOURS.map((h,i)=>`<label for="g${i}">${h}<input id="g${i}" type="number" min="0" step="1" inputmode="numeric"></label>`).join("");
+  $("wh").innerHTML='<option value="">No wait</option>'+HOURS.map((h,i)=>`<option value="${i}">${h}</option>`).join("");
+}
+function clearForm(){editing=null;$("f").reset();$("formttl").textContent="Add a day";$("del").hidden=true;$("delyes").hidden=true;$("fday").textContent="";$("fmsg").textContent="";}
+function loadForm(date){const e=entries[date];if(!e)return;editing=date;$("fdate").value=e.date;$("fday").textContent=dayOf(e.date);
+  HOURS.forEach((_,i)=>{const v=num(e.gc?.[i]);$("g"+i).value=v==null?"":v;});
+  $("wh").value=e.wHour==null?"":String(e.wHour);$("wp").value=e.wParties??"";$("wg").value=e.wGuests??"";$("ws").value=e.wSeated??"";$("fnote").value=e.note||"";
+  $("formttl").textContent="Edit "+fmtDate(date);$("del").hidden=false;$("delyes").hidden=true;$("fmsg").textContent="";
+  $("formttl").scrollIntoView({behavior:"smooth",block:"start"});}
+function readNum(id){const v=$(id).value.trim();if(v==="")return null;const n=Number(v);return isFinite(n)&&n>=0?Math.round(n):NaN;}
+
+$("fdate").addEventListener("input",()=>{const d=dayOf($("fdate").value);$("fday").textContent=d||"";$("fmsg").textContent="";});
+$("clear").onclick=clearForm;
+$("del").onclick=()=>{$("delyes").hidden=false;$("fmsg").className="msg err";$("fmsg").textContent="Delete "+fmtDate(editing)+"? This can't be undone.";};
+$("delyes").onclick=async()=>{const d=editing;if(!d)return;
+  try{if(db)await db.collection("entries").doc(d).delete();delete entries[d];render();clearForm();$("fmsg").className="msg ok";$("fmsg").textContent="Deleted.";}
+  catch(e){$("fmsg").className="msg err";$("fmsg").textContent="Couldn't delete. Check your connection and try again.";}};
+
+$("f").addEventListener("submit",async ev=>{ev.preventDefault();const m=$("fmsg");m.className="msg err";
+  const date=$("fdate").value;if(!date||!dayOf(date)){m.textContent="Pick a date first.";$("fdate").focus();return;}
+  const gc=HOURS.map((_,i)=>readNum("g"+i));if(gc.some(v=>Number.isNaN(v))){m.textContent="Guest counts must be whole numbers, 0 or more.";return;}
+  if(gc.every(v=>v==null)){m.textContent="Enter at least one hourly guest count.";return;}
+  const wHour=$("wh").value===""?null:Number($("wh").value);const wParties=readNum("wp"),wGuests=readNum("wg"),wSeated=readNum("ws");
+  if([wParties,wGuests,wSeated].some(v=>Number.isNaN(v))){m.textContent="Waiting numbers must be whole numbers, 0 or more.";return;}
+  if(wHour!=null&&(wParties==null||wGuests==null||wSeated==null)){m.textContent="Fill parties waited, guests waited and parties seated for the wait.";return;}
+  if(wHour!=null&&wSeated>wParties){m.textContent="Parties seated can't be more than parties waited.";return;}
+  const body={date,gc,wHour,wParties:wHour==null?null:wParties,wGuests:wHour==null?null:wGuests,wSeated:wHour==null?null:wSeated,note:$("fnote").value.trim()};
+  $("save").disabled=true;
+  try{if(db){await db.collection("entries").doc(date).set(body);if(editing&&editing!==date)await db.collection("entries").doc(editing).delete();}
+    if(editing&&editing!==date)delete entries[editing];entries[date]=body;day=dayOf(date);render();clearForm();
+    m.className="msg ok";m.textContent=db?"Saved "+fmtDate(date)+" ("+day+") in this browser.":"Added for this visit only. Saving isn't available here.";}
+  catch(e){m.textContent=e&&e.code==="invalid_argument"?"You can view this page but not change it.":"Couldn't save. Check your connection and try again.";}
+  finally{$("save").disabled=false;}});
+
+let setTimer=null;
+function onSetting(){const s=Number($("std").value),d=Number($("dine").value);if(!(s>=1)||!(d>0)){$("setmsg").className="msg err";$("setmsg").textContent="Use numbers above 0.";return;}
+  $("setmsg").textContent="";settings={std:s,dine:d};render();clearTimeout(setTimer);
+  setTimer=setTimeout(async()=>{if(!db)return;try{await db.doc("settings/main").set(settings);}catch(e){$("setmsg").className="msg err";$("setmsg").textContent="Settings not saved.";}},700);}
+$("std").addEventListener("input",onSetting);$("dine").addEventListener("input",onSetting);
+
+buildForm();buildMonthForm();render();
+const SEED={entries:{"2026-10-10":{date:"2026-10-10",gc:[6,31,46,40,16,27,54,35,49,59,29,2],wHour:null,wParties:null,wGuests:null,wSeated:null,note:""},"2026-10-17":{date:"2026-10-17",gc:[18,26,36,49,40,40,46,34,35,48,21,3],wHour:9,wParties:11,wGuests:39,wSeated:6,note:"Wait hour assumed 7-8 PM (not recorded). Empty tables during the wait."}},
+months:{"2026-10":{month:"2026-10",note:"From the October log.",days:{Monday:{sales:144000,gc:194,c1:24,c2:76},Tuesday:{sales:176000,gc:182,c1:33,c2:67},Wednesday:{sales:161000,gc:176,c1:27,c2:73},Thursday:{sales:187000,gc:249,c1:31,c2:69},Friday:{sales:206000,gc:298,c1:30,c2:70},Saturday:{sales:293000,gc:440,c1:23,c2:77},Sunday:{sales:303000,gc:460,c1:19,c2:81}}},
+"2026-09":{month:"2026-09",note:"From the September log (gross as sales). Monday GC and Sunday not recorded.",days:{Monday:{sales:143000,gc:null,c1:null,c2:null},Tuesday:{sales:164000,gc:203,c1:null,c2:null},Wednesday:{sales:168000,gc:226,c1:null,c2:null},Thursday:{sales:166000,gc:216,c1:null,c2:null},Friday:{sales:204000,gc:280,c1:null,c2:null},Saturday:{sales:284000,gc:417,c1:null,c2:null},Sunday:{sales:null,gc:null,c1:null,c2:null}}}},
+settings:{main:{std:15,dine:1}}};
+const KEY="guest-heatmap-v1";
+function loadStore(){try{const v=JSON.parse(localStorage.getItem(KEY));if(v&&v.entries)return v;}catch(e){}return JSON.parse(JSON.stringify(SEED));}
+let store=loadStore();
+function persist(){try{localStorage.setItem(KEY,JSON.stringify(store));}catch(e){}}
+const subs={};
+function fire(c){(subs[c]||[]).forEach(f=>f());}
+function docRef(c,id){return{set:async b=>{(store[c]=store[c]||{})[id]=JSON.parse(JSON.stringify(b));persist();},delete:async()=>{if(store[c])delete store[c][id];persist();},
+  onSnapshot:fn=>{const run=()=>{const v=store[c]?.[id];fn({exists:!!v,data:()=>v});};(subs[c]=subs[c]||[]).push(run);run();}};}
+db={collection:c=>({doc:id=>docRef(c,id),onSnapshot:fn=>{const run=()=>fn({docs:Object.keys(store[c]||{}).map(id=>({id,data:()=>store[c][id]}))});(subs[c]=subs[c]||[]).push(run);run();}}),
+  doc:p=>{const [c,id]=p.split("/");return docRef(c,id);}};
+db.collection("entries").onSnapshot(snap=>{const n={};snap.docs.forEach(d=>{const v=d.data();if(v&&v.date)n[d.id]=v;});entries=n;render();});
+db.collection("months").onSnapshot(snap=>{const n={};snap.docs.forEach(d=>{const v=d.data();if(v&&v.days)n[d.id]=v;});months=n;renderMonths();});
+db.doc("settings/main").onSnapshot(s=>{const v=s.exists?s.data():null;if(v){settings={std:v.std,dine:v.dine};$("std").value=v.std;$("dine").value=v.dine;render();}});
+</script>
+
+</body>
+</html>
